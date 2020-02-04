@@ -1,5 +1,5 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { decodeRunRequest, fulfillOracleRequest } = require('@chainlink/test-helpers')
+const { oracle } = require('@chainlink/test-helpers')
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { expectRevert, time } = require('openzeppelin-test-helpers')
 
@@ -67,7 +67,7 @@ contract('MyContract', accounts => {
             times,
             { from: consumer },
           )
-          request = decodeRunRequest(tx.receipt.rawLogs[3])
+          request = oracle.decodeRunRequest(tx.receipt.rawLogs[3])
           assert.equal(oc.address, tx.receipt.rawLogs[3].address)
           assert.equal(
             request.topic,
@@ -96,8 +96,10 @@ contract('MyContract', accounts => {
         times,
         { from: consumer },
       )
-      request = decodeRunRequest(tx.receipt.rawLogs[3])
-      await fulfillOracleRequest(oc, request, response, { from: oracleNode })
+      request = oracle.decodeRunRequest(tx.receipt.rawLogs[3])
+      await oc.fulfillOracleRequest(
+        ...oracle.convertFufillParams(request, response, { from: oracleNode }),
+      )
     })
 
     it('records the data given to it by the oracle', async () => {
@@ -117,9 +119,11 @@ contract('MyContract', accounts => {
 
       it('does not accept the data provided', async () => {
         await expectRevert.unspecified(
-          fulfillOracleRequest(oc, request, response, {
-            from: oracleNode,
-          }),
+          oc.fulfillOracleRequest(
+            ...oracle.convertFufillParams(request, response, {
+              from: oracleNode,
+            }),
+          ),
         )
       })
     })
@@ -127,7 +131,7 @@ contract('MyContract', accounts => {
     context('when called by anyone other than the oracle contract', () => {
       it('does not accept the data provided', async () => {
         await expectRevert.unspecified(
-          cc.fulfill(request.id, response, { from: stranger }),
+          cc.fulfill(request.requestId, response, { from: stranger }),
         )
       })
     })
@@ -147,14 +151,14 @@ contract('MyContract', accounts => {
         times,
         { from: consumer },
       )
-      request = decodeRunRequest(tx.receipt.rawLogs[3])
+      request = oracle.decodeRunRequest(tx.receipt.rawLogs[3])
     })
 
     context('before the expiration time', () => {
       it('cannot cancel a request', async () => {
         await expectRevert(
           cc.cancelRequest(
-            request.id,
+            request.requestId,
             request.payment,
             request.callbackFunc,
             request.expiration,
@@ -174,7 +178,7 @@ contract('MyContract', accounts => {
         it('cannot cancel a request', async () => {
           await expectRevert.unspecified(
             cc.cancelRequest(
-              request.id,
+              request.requestId,
               request.payment,
               request.callbackFunc,
               request.expiration,
@@ -187,7 +191,7 @@ contract('MyContract', accounts => {
       context('when called by an owner', () => {
         it('can cancel a request', async () => {
           await cc.cancelRequest(
-            request.id,
+            request.requestId,
             request.payment,
             request.callbackFunc,
             request.expiration,
